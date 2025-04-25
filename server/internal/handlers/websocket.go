@@ -1,7 +1,7 @@
-
 package handlers
 
 import (
+	"chat-app/internal/config"
 	"chat-app/internal/models"
 	"chat-app/internal/store"
 	"encoding/json"
@@ -40,11 +40,17 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	store.SetConnection(user.ID, wsConn)
 
-	user.IsOnline = true
-	user.LastSeen = time.Now()
-	store.SetUser(user.ID, user)
+	// Update user's online status in database
+	_, err = config.DB.Exec(`
+		UPDATE users 
+		SET is_online = true, last_seen = NOW() 
+		WHERE id = ?
+	`, user.ID)
+	if err != nil {
+		log.Printf("Error updating online status: %v", err)
+	}
 
-	// Broadcast user status
+	// Broadcast user's online status to others
 	broadcastUserStatus(user.ID, true)
 
 	go handleWebSocketMessages(user.ID, conn, wsConn)
@@ -56,10 +62,14 @@ func handleWebSocketMessages(userID string, conn *websocket.Conn, wsConn *store.
 		conn.Close()
 		store.RemoveConnection(userID)
 
-		if user, ok := store.GetUsers()[userID]; ok {
-			user.IsOnline = false
-			user.LastSeen = time.Now()
-			store.SetUser(userID, user)
+		// Update user's offline status in database
+		_, err := config.DB.Exec(`
+			UPDATE users 
+			SET is_online = false, last_seen = NOW() 
+			WHERE id = ?
+		`, userID)
+		if err != nil {
+			log.Printf("Error updating offline status: %v", err)
 		}
 
 		broadcastUserStatus(userID, false)
@@ -78,21 +88,32 @@ func handleWebSocketMessages(userID string, conn *websocket.Conn, wsConn *store.
 				chatID, _ := data["chatId"].(string)
 				isTyping, _ := data["isTyping"].(bool)
 
-				if chat, ok := store.GetChats()[chatID]; ok {
-					for _, pid := range chat.ParticipantIDs {
-						if pid != userID {
-							if conn, exists := store.GetConnection(pid); exists {
-								msgJSON, _ := json.Marshal(WSMessage{
-									Type: "typing",
-									Payload: map[string]interface{}{
-										"chatId":   chatID,
-										"userId":   userID,
-										"isTyping": isTyping,
-									},
-								})
-								conn.Send <- msgJSON
-							}
-						}
+				// Get chat participants
+				rows, err := config.DB.Query(`
+					SELECT user_id 
+					FROM chat_participants 
+					WHERE chat_id = ? AND user_id != ?
+				`, chatID, userID)
+				if err != nil {
+					continue
+				}
+				defer rows.Close()
+
+				for rows.Next() {
+					var pid string
+					if err := rows.Scan(&pid); err != nil {
+						continue
+					}
+					if conn, exists := store.GetConnection(pid); exists {
+						msgJSON, _ := json.Marshal(WSMessage{
+							Type: "typing",
+							Payload: map[string]interface{}{
+								"chatId":   chatID,
+								"userId":   userID,
+								"isTyping": isTyping,
+							},
+						})
+						conn.Send <- msgJSON
 					}
 				}
 			}
@@ -116,6 +137,22 @@ func writePump(userID string, conn *websocket.Conn, wsConn *store.WebSocketConne
 }
 
 func broadcastUserStatus(userID string, isOnline bool) {
+	// Get all users who have chats with this user
+	rows, err := config.DB.Query(`
+		SELECT DISTINCT user_id 
+		FROM chat_participants 
+		WHERE chat_id IN (
+			SELECT chat_id 
+			FROM chat_participants 
+			WHERE user_id = ?
+		) AND user_id != ?
+	`, userID, userID)
+	if err != nil {
+		log.Printf("Error getting chat participants: %v", err)
+		return
+	}
+	defer rows.Close()
+
 	msgJSON, _ := json.Marshal(WSMessage{
 		Type: "status",
 		Payload: map[string]interface{}{
@@ -124,9 +161,12 @@ func broadcastUserStatus(userID string, isOnline bool) {
 		},
 	})
 
-	connections := store.GetAllConnections()
-	for pid, conn := range connections {
-		if pid != userID {
+	for rows.Next() {
+		var pid string
+		if err := rows.Scan(&pid); err != nil {
+			continue
+		}
+		if conn, exists := store.GetConnection(pid); exists {
 			conn.Send <- msgJSON
 		}
 	}

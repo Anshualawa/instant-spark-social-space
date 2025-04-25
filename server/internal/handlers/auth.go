@@ -1,10 +1,8 @@
-
 package handlers
 
 import (
 	"chat-app/internal/config"
 	"chat-app/internal/models"
-	"chat-app/internal/store"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -26,7 +24,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, found := store.GetUserByEmail(req.Email); found {
+	var count int
+	err := config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", req.Email).Scan(&count)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if count > 0 {
 		http.Error(w, "Email is already in use", http.StatusBadRequest)
 		return
 	}
@@ -37,21 +41,34 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newUser := models.User{
-		ID:        uuid.New().String(),
-		Username:  req.Username,
-		Email:     req.Email,
-		Password:  string(hashedPassword),
-		IsOnline:  true,
-		LastSeen:  time.Now(),
-		CreatedAt: time.Now(),
+	userID := uuid.New().String()
+
+	_, err = config.DB.Exec(`
+		INSERT INTO users (id, username, email, password, is_online, last_seen, created_at)
+		VALUES (?, ?, ?, ?, true, NOW(), NOW())
+	`, userID, req.Username, req.Email, string(hashedPassword))
+	if err != nil {
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		return
 	}
 
-	token := generateToken(newUser.ID)
-	store.SetUser(newUser.ID, newUser)
+	var user models.User
+	err = config.DB.QueryRow(`
+		SELECT id, username, email, avatar, is_online, last_seen, created_at 
+		FROM users WHERE id = ?
+	`, userID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.Avatar,
+		&user.IsOnline, &user.LastSeen, &user.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, "Error retrieving user", http.StatusInternalServerError)
+		return
+	}
+
+	token := generateToken(user.ID)
 
 	response := models.LoginResponse{
-		User:  newUser,
+		User:  user,
 		Token: token,
 	}
 
@@ -66,20 +83,33 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, found := store.GetUserByEmail(req.Email)
-	if !found {
+	var user models.User
+	var hashedPassword string
+	err := config.DB.QueryRow(`
+		SELECT id, username, email, password, avatar, is_online, last_seen, created_at 
+		FROM users WHERE email = ?
+	`, req.Email).Scan(
+		&user.ID, &user.Username, &user.Email, &hashedPassword, &user.Avatar,
+		&user.IsOnline, &user.LastSeen, &user.CreatedAt,
+	)
+	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	_, err = config.DB.Exec("UPDATE users SET is_online = true, last_seen = NOW() WHERE id = ?", user.ID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
 	user.IsOnline = true
 	user.LastSeen = time.Now()
-	store.SetUser(user.ID, user)
 
 	token := generateToken(user.ID)
 
