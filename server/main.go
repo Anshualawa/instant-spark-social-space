@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -117,26 +118,26 @@ func main() {
 	r := mux.NewRouter()
 	
 	// Auth routes
-	r.HandleFunc("/api/auth/register", registerHandler).Methods("POST")
-	r.HandleFunc("/api/auth/login", loginHandler).Methods("POST")
+	r.HandleFunc("/api/auth/register", registerHandler).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/auth/login", loginHandler).Methods("POST", "OPTIONS")
 	
 	// User routes
-	r.HandleFunc("/api/users", authMiddleware(getUsersHandler)).Methods("GET")
-	r.HandleFunc("/api/users/me", authMiddleware(getCurrentUserHandler)).Methods("GET")
-	r.HandleFunc("/api/users/{id}", authMiddleware(getUserHandler)).Methods("GET")
+	r.HandleFunc("/api/users", authMiddleware(getUsersHandler)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users/me", authMiddleware(getCurrentUserHandler)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users/{id}", authMiddleware(getUserHandler)).Methods("GET", "OPTIONS")
 	
 	// Chat routes
-	r.HandleFunc("/api/chats", authMiddleware(getChatsHandler)).Methods("GET")
-	r.HandleFunc("/api/chats", authMiddleware(createChatHandler)).Methods("POST")
-	r.HandleFunc("/api/chats/group", authMiddleware(createGroupChatHandler)).Methods("POST")
-	r.HandleFunc("/api/chats/{id}", authMiddleware(getChatHandler)).Methods("GET")
-	r.HandleFunc("/api/chats/{id}/messages", authMiddleware(getChatMessagesHandler)).Methods("GET")
-	r.HandleFunc("/api/chats/{id}/messages", authMiddleware(sendMessageHandler)).Methods("POST")
+	r.HandleFunc("/api/chats", authMiddleware(getChatsHandler)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats", authMiddleware(createChatHandler)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/group", authMiddleware(createGroupChatHandler)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/{id}", authMiddleware(getChatHandler)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{id}/messages", authMiddleware(getChatMessagesHandler)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{id}/messages", authMiddleware(sendMessageHandler)).Methods("POST", "OPTIONS")
 	
 	// WebSocket route
 	r.HandleFunc("/ws", authMiddleware(wsHandler))
 	
-	// CORS middleware
+	// Use CORS middleware
 	r.Use(corsMiddleware)
 	
 	// Create some test data
@@ -151,15 +152,19 @@ func main() {
 // CORS middleware
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers for all responses
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		
+		// Handle preflight OPTIONS requests
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		
+		// Process the request
 		next.ServeHTTP(w, r)
 	})
 }
@@ -167,6 +172,12 @@ func corsMiddleware(next http.Handler) http.Handler {
 // Auth middleware
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Always allow OPTIONS requests
+		if r.Method == "OPTIONS" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
 		// WebSocket handling
 		if r.URL.Path == "/ws" {
 			token := r.URL.Query().Get("token")
