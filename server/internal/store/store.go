@@ -2,6 +2,8 @@
 package store
 
 import (
+	"chat-app/internal/models"
+	"database/sql"
 	"sync"
 )
 
@@ -12,6 +14,7 @@ type WebSocketConnection struct {
 
 var (
 	connections = make(map[string]*WebSocketConnection)
+	users       = make(map[string]models.User)
 	mutex       = &sync.RWMutex{}
 )
 
@@ -40,3 +43,28 @@ func GetAllConnections() map[string]*WebSocketConnection {
 	return connections
 }
 
+// User store functions
+func AddUser(user models.User) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	users[user.ID] = user
+}
+
+func RemoveUser(userID string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	delete(users, userID)
+}
+
+func GetUser(userID string) (models.User, bool) {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	user, exists := users[userID]
+	return user, exists
+}
+
+func GetUsers() map[string]models.User {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	return users
+}

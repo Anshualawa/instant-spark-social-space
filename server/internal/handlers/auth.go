@@ -1,8 +1,11 @@
+
 package handlers
 
 import (
 	"chat-app/internal/config"
 	"chat-app/internal/models"
+	"chat-app/internal/store"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -53,16 +56,22 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
+	var avatar sql.NullString
+	
 	err = config.DB.QueryRow(`
 		SELECT id, username, email, avatar, is_online, last_seen, created_at 
 		FROM users WHERE id = ?
 	`, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Avatar,
+		&user.ID, &user.Username, &user.Email, &avatar,
 		&user.IsOnline, &user.LastSeen, &user.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, "Error retrieving user", http.StatusInternalServerError)
 		return
+	}
+
+	if avatar.Valid {
+		user.Avatar = avatar.String
 	}
 
 	token := generateToken(user.ID)
@@ -71,6 +80,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Token: token,
 	}
+	
+	// Add user to the in-memory store for WebSocket
+	store.AddUser(user)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -85,16 +97,22 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	var hashedPassword string
+	var avatar sql.NullString
+	
 	err := config.DB.QueryRow(`
 		SELECT id, username, email, password, avatar, is_online, last_seen, created_at 
 		FROM users WHERE email = ?
 	`, req.Email).Scan(
-		&user.ID, &user.Username, &user.Email, &hashedPassword, &user.Avatar,
+		&user.ID, &user.Username, &user.Email, &hashedPassword, &avatar,
 		&user.IsOnline, &user.LastSeen, &user.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
+	}
+
+	if avatar.Valid {
+		user.Avatar = avatar.String
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.Password)); err != nil {
@@ -117,6 +135,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Token: token,
 	}
+	
+	// Add user to the in-memory store for WebSocket
+	store.AddUser(user)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
