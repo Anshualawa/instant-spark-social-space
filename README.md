@@ -1,73 +1,112 @@
-# Welcome to your Lovable project
 
-## Project info
+# Real-Time Chat Application
 
-**URL**: https://lovable.dev/projects/46e63404-0869-4e09-8de9-b4eaaa02d1ea
+A full-stack real-time chat application built with React, TypeScript, Go, and MySQL.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- User authentication (login/register)
+- One-to-one private messaging
+- Group chats
+- Real-time messaging with WebSockets
+- Online/offline status indicators
+- Typing indicators
+- Message history
 
-**Use Lovable**
+## Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/46e63404-0869-4e09-8de9-b4eaaa02d1ea) and start prompting.
+### Frontend
+- React with TypeScript
+- Tailwind CSS for styling
+- WebSocket API for real-time communication
+- Context API for state management
+- React Router for navigation
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend
+- Go
+- JWT for authentication
+- Gorilla WebSocket for real-time communication
+- Gorilla Mux for routing
+- bcrypt for password hashing
 
-**Use your preferred IDE**
+### Database
+- MySQL (in production)
+- In-memory storage for development
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Getting Started
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Frontend
 
-Follow these steps:
+1. Install dependencies:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+```bash
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. Start the development server:
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The frontend will run on http://localhost:8080
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Backend
 
-**Use GitHub Codespaces**
+1. Navigate to the server directory:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+cd server
+```
 
-## What technologies are used for this project?
+2. Install Go dependencies:
 
-This project is built with:
+```bash
+go mod download
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+3. Run the server:
 
-## How can I deploy this project?
+```bash
+go run main.go
+```
 
-Simply open [Lovable](https://lovable.dev/projects/46e63404-0869-4e09-8de9-b4eaaa02d1ea) and click on Share -> Publish.
+The backend will run on http://localhost:8000
 
-## Can I connect a custom domain to my Lovable project?
+## Project Structure
 
-Yes, you can!
+```
+├── src/
+│   ├── components/         # UI components
+│   │   ├── auth/           # Authentication components
+│   │   └── chat/           # Chat interface components
+│   ├── contexts/           # React contexts for state management
+│   ├── pages/              # Application pages
+│   ├── services/           # API and WebSocket services
+│   ├── types/              # TypeScript type definitions
+│   └── App.tsx             # Main application component
+├── server/
+│   ├── main.go             # Go backend server
+│   └── go.mod              # Go module dependencies
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Production Setup
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+For a production environment, you would need to:
+
+1. Set up a MySQL database
+2. Configure environment variables for database connection
+3. Deploy the frontend and backend to separate servers or containers
+4. Configure CORS properly for security
+5. Use HTTPS for secure communication
+6. Store JWT secrets securely
+7. Implement logging and monitoring
+
+## Future Improvements
+
+- File sharing capability
+- Message reactions
+- Read receipts
+- Message search functionality
+- User profiles
+- Push notifications
