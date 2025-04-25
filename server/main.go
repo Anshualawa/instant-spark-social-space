@@ -2,6 +2,7 @@
 package main
 
 import (
+	"chat-app/internal/config"
 	"chat-app/internal/handlers"
 	"chat-app/internal/middleware"
 	"fmt"
@@ -13,6 +14,10 @@ import (
 )
 
 func main() {
+	// Initialize database connection
+	config.InitDB()
+	defer config.DB.Close()
+
 	r := chi.NewRouter()
 
 	// CORS middleware

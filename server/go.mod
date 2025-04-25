@@ -10,4 +10,6 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	github.com/go-sql-driver/mysql v1.7.1
 )
+
