@@ -3,7 +3,6 @@ package store
 
 import (
 	"chat-app/internal/models"
-	"database/sql"
 	"sync"
 )
 
