@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const MessageView: React.FC = () => {
-  const { activeChat, messages, typingUsers } = useChat();
+  const { activeChat, messages = [], typingUsers = {} } = useChat();
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -35,14 +35,14 @@ const MessageView: React.FC = () => {
   
   // Check if user is typing
   const isAnyoneTyping = () => {
-    return Object.values(typingUsers).some(isTyping => isTyping);
+    return typingUsers && Object.values(typingUsers).some(isTyping => isTyping);
   };
   
   // Get typing indicator text
   const getTypingText = () => {
     if (!activeChat) return '';
     
-    const typingUserIds = Object.entries(typingUsers)
+    const typingUserIds = Object.entries(typingUsers || {})
       .filter(([_, isTyping]) => isTyping)
       .map(([userId]) => userId);
     
@@ -141,7 +141,7 @@ const MessageView: React.FC = () => {
         </div>
         
         {/* Messages */}
-        {messages.length === 0 ? (
+        {!messages || messages.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-muted-foreground">No messages yet</p>
             <p className="text-sm">Send a message to start the conversation</p>

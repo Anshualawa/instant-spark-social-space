@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Chat, Message, User, WebSocketMessage } from '../types';
 import { chatApi } from '../services/api';
@@ -47,21 +46,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
-  // Initialize WebSocket connection when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       const token = localStorage.getItem('token');
       if (token) {
         webSocketService.connect(token);
         
-        // Set up WebSocket status listener
         const statusListener = (status: 'connected' | 'disconnected' | 'connecting') => {
           setWsStatus(status);
         };
         
         webSocketService.addStatusListener(statusListener);
         
-        // Clean up
         return () => {
           webSocketService.removeStatusListener(statusListener);
           webSocketService.disconnect();
@@ -70,14 +66,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [isAuthenticated]);
 
-  // Fetch chats when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       loadChats();
     }
   }, [isAuthenticated]);
 
-  // Listen for WebSocket messages
   useEffect(() => {
     if (isAuthenticated) {
       const messageListener = (wsMessage: WebSocketMessage) => {
@@ -104,7 +98,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [isAuthenticated, activeChat, chats]);
 
-  // Fetch messages when active chat changes
   useEffect(() => {
     if (activeChat) {
       loadMessages(activeChat.id);
@@ -113,7 +106,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [activeChat]);
 
-  // Load all chats
   const loadChats = async () => {
     setIsLoading(true);
     try {
@@ -131,7 +123,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Load messages for a specific chat
   const loadMessages = async (chatId: string) => {
     setIsLoading(true);
     try {
@@ -149,12 +140,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Send a message
   const sendMessage = async (content: string) => {
     if (!activeChat || !content.trim() || !user) return;
     
     try {
-      // Optimistically add message to UI
       const tempId = `temp-${Date.now()}`;
       const tempMessage: Message = {
         id: tempId,
@@ -167,18 +156,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setMessages(prev => [...prev, tempMessage]);
       
-      // Send through API
       const sentMessage = await chatApi.sendMessage(activeChat.id, content);
       
-      // Update with real message from server
       setMessages(prev => 
         prev.map(msg => msg.id === tempId ? sentMessage : msg)
       );
       
-      // Update chat list with latest message
       updateChatWithLatestMessage(activeChat.id, sentMessage);
       
-      // Clear typing indicator
       setTyping(false);
       
     } catch (error) {
@@ -189,12 +174,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Please check your connection and try again",
       });
       
-      // Remove temp message on error
       setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')));
     }
   };
 
-  // Create a new private chat
   const createChat = async (participantId: string) => {
     setIsLoading(true);
     try {
@@ -217,7 +200,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Create a new group chat
   const createGroupChat = async (name: string, participantIds: string[]) => {
     setIsLoading(true);
     try {
@@ -240,17 +222,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Handle incoming new message
   const handleNewMessage = (message: Message) => {
-    // Add message to current chat if it's active
     if (activeChat && activeChat.id === message.chatId) {
       setMessages(prev => [...prev, message]);
     }
     
-    // Update chat list with latest message
     updateChatWithLatestMessage(message.chatId, message);
     
-    // Notify if not in active chat
     if (!activeChat || activeChat.id !== message.chatId) {
       const chat = chats.find(c => c.id === message.chatId);
       if (chat) {
@@ -263,7 +241,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Update a chat with the latest message
   const updateChatWithLatestMessage = (chatId: string, message: Message) => {
     setChats(prev => prev.map(chat => {
       if (chat.id === chatId) {
@@ -277,7 +254,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  // Handle typing indicator
   const handleTyping = (data: { chatId: string, userId: string, isTyping: boolean }) => {
     if (activeChat && activeChat.id === data.chatId && user?.id !== data.userId) {
       setTypingUsers(prev => ({
@@ -287,9 +263,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Handle user status changes
   const handleStatusChange = (data: { userId: string, isOnline: boolean }) => {
-    // Update user status in chats
     setChats(prev => prev.map(chat => ({
       ...chat,
       participants: chat.participants.map(p => 
@@ -298,7 +272,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })));
   };
 
-  // Send typing indicator
   const setTyping = (isTyping: boolean) => {
     if (activeChat && user) {
       webSocketService.sendMessage({
@@ -317,14 +290,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         chats,
         activeChat,
-        messages,
+        messages: messages || [],
         isLoading,
         sendMessage,
         setActiveChat,
         createChat,
         createGroupChat,
         wsStatus,
-        typingUsers,
+        typingUsers: typingUsers || {},
         setTyping,
       }}
     >
