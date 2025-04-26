@@ -18,7 +18,7 @@ func InitDB() {
 	
 	// Configure MySQL connection parameters
 	dbUsername := "root"     // Replace with your MySQL username
-	dbPassword := "root"     // Replace with your MySQL password
+	dbPassword := ""     // Replace with your MySQL password
 	dbHost := "localhost"
 	dbPort := "3306"
 	dbName := "chat_app"
