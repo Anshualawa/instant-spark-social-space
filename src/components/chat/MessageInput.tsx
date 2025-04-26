@@ -1,87 +1,81 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, KeyboardEvent, ChangeEvent } from 'react';
 import { useChat } from '@/contexts/ChatContext';
+import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { SendHorizonal } from 'lucide-react';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const MessageInput: React.FC = () => {
-  const [message, setMessage] = useState('');
-  const { activeChat, sendMessage, setTyping } = useChat();
+  const [message, setMessage] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Focus textarea when active chat changes
-  useEffect(() => {
-    if (activeChat && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [activeChat]);
-  
-  // Handle typing indicator with debounce
-  useEffect(() => {
-    if (message.trim() && activeChat) {
-      setTyping(true);
-      
-      // Clear previous timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      
-      // Set timeout to clear typing indicator
-      typingTimeoutRef.current = setTimeout(() => {
-        setTyping(false);
-      }, 3000);
-    } else {
-      setTyping(false);
-    }
+  const { activeChat, sendMessage, setTyping } = useChat();
+
+  // Debounce typing indicator to avoid sending too many events
+  const debouncedTyping = useDebounce((isTyping: boolean) => {
+    setTyping(isTyping);
+  }, 500);
+
+  // Handle input change
+  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
     
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, [message, activeChat, setTyping]);
-  
-  // Handle send on Enter (but allow Shift+Enter for new line)
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+    // Send typing indicator when user starts typing
+    if (e.target.value.length > 0) {
+      debouncedTyping(true);
+    } else {
+      debouncedTyping(false);
     }
   };
-  
-  // Handle sending message
-  const handleSendMessage = async () => {
+
+  // Handle message send
+  const handleSend = async () => {
     if (!message.trim() || !activeChat) return;
     
-    await sendMessage(message);
-    setMessage('');
+    try {
+      await sendMessage(message.trim());
+      setMessage('');
+      
+      // Clear typing indicator
+      debouncedTyping(false);
+      
+      // Focus back on textarea
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
-  
+
+  // Handle enter key press
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Send on Enter (but not with Shift for new line)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   if (!activeChat) return null;
-  
+
   return (
-    <div className="p-4 border-t bg-white dark:bg-gray-950">
-      <div className="flex items-end space-x-2">
-        <Textarea
-          ref={textareaRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          className="min-h-10 resize-none"
-          maxRows={5}
-        />
-        <Button
-          onClick={handleSendMessage}
-          disabled={!message.trim()}
-          className="h-10 px-3 rounded-full"
-          size="icon"
-        >
-          <SendHorizonal className="h-5 w-5" />
-        </Button>
-      </div>
+    <div className="p-4 border-t bg-background flex items-end gap-2">
+      <Textarea
+        ref={textareaRef}
+        value={message}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Type a message..."
+        className="min-h-[60px] resize-none"
+      />
+      <Button 
+        onClick={handleSend} 
+        disabled={!message.trim()}
+        className="rounded-full h-10 w-10 p-0 flex-shrink-0"
+      >
+        <Send className="h-5 w-5" />
+      </Button>
     </div>
   );
 };
