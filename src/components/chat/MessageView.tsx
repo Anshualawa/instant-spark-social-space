@@ -18,6 +18,11 @@ const MessageView: React.FC = () => {
     }
   }, [messages]);
   
+  useEffect(() => {
+    // Log messages to help with debugging
+    console.log('MessageView - current messages:', messages);
+  }, [messages]);
+  
   // Get chat name
   const getChatName = () => {
     if (!activeChat) return '';

@@ -16,7 +16,9 @@ class WebSocketService {
     this.notifyStatusListeners('connecting');
     
     // WebSocket connection with authentication token
-    this.socket = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+    const wsUrl = `ws://localhost:8000/ws?token=${token}`;
+    console.log(`Connecting to WebSocket at ${wsUrl}`);
+    this.socket = new WebSocket(wsUrl);
     
     // Connection opened
     this.socket.onopen = () => {
@@ -34,6 +36,7 @@ class WebSocketService {
     this.socket.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
+        console.log('WebSocket message received:', message);
         this.notifyMessageListeners(message);
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
@@ -44,9 +47,11 @@ class WebSocketService {
     this.socket.onclose = () => {
       console.log('WebSocket disconnected');
       this.notifyStatusListeners('disconnected');
+      this.socket = null;
       
       // Attempt to reconnect
       this.reconnectTimer = setTimeout(() => {
+        console.log('Attempting to reconnect WebSocket...');
         this.connect(token);
       }, 5000);
     };
@@ -73,9 +78,12 @@ class WebSocketService {
   // Send a message
   sendMessage(message: WebSocketMessage): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
+      const messageString = JSON.stringify(message);
+      console.log('Sending WebSocket message:', message);
+      this.socket.send(messageString);
     } else {
-      console.error('WebSocket is not connected');
+      console.error('WebSocket is not connected. Message not sent:', message);
+      // Store message for later sending or notify user
     }
   }
   

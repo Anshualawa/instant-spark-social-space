@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Chat, Message, User, WebSocketMessage } from '../types';
 import { chatApi } from '../services/api';
@@ -75,6 +76,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (isAuthenticated) {
       const messageListener = (wsMessage: WebSocketMessage) => {
+        console.log('WebSocket message received:', wsMessage);
         switch (wsMessage.type) {
           case 'message':
             handleNewMessage(wsMessage.payload);
@@ -96,7 +98,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         webSocketService.removeMessageListener(messageListener);
       };
     }
-  }, [isAuthenticated, activeChat, chats]);
+  }, [isAuthenticated, activeChat]);
 
   useEffect(() => {
     if (activeChat) {
@@ -110,7 +112,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const chatData = await chatApi.getChats();
-      setChats(chatData);
+      setChats(chatData || []);
     } catch (error) {
       console.error('Error loading chats:', error);
       toast({
@@ -127,7 +129,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const messageData = await chatApi.getMessages(chatId);
-      setMessages(messageData);
+      setMessages(messageData || []);
     } catch (error) {
       console.error(`Error loading messages for chat ${chatId}:`, error);
       toast({
@@ -189,12 +191,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const newChat = await chatApi.createChat([participantId]);
-      setChats(prev => [newChat, ...prev]);
-      setActiveChat(newChat);
-      toast({
-        title: "Chat created",
-        description: `New conversation started`,
-      });
+      if (newChat) {
+        setChats(prev => [newChat, ...(prev || [])]);
+        setActiveChat(newChat);
+        toast({
+          title: "Chat created",
+          description: `New conversation started`,
+        });
+      }
     } catch (error) {
       console.error('Error creating chat:', error);
       toast({
@@ -211,12 +215,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const newChat = await chatApi.createGroupChat(name, participantIds);
-      setChats(prev => [newChat, ...prev]);
-      setActiveChat(newChat);
-      toast({
-        title: "Group created",
-        description: `Group "${name}" has been created`,
-      });
+      if (newChat) {
+        setChats(prev => [newChat, ...(prev || [])]);
+        setActiveChat(newChat);
+        toast({
+          title: "Group created",
+          description: `Group "${name}" has been created`,
+        });
+      }
     } catch (error) {
       console.error('Error creating group chat:', error);
       toast({
@@ -230,17 +236,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleNewMessage = (message: Message) => {
+    console.log('Handling new message:', message);
+    
+    // Update messages if we're in the active chat
     if (activeChat && activeChat.id === message.chatId) {
       setMessages(prev => {
         if (prev === null) return [message];
-        return [...prev, message];
+        // Check if message already exists to avoid duplicates
+        if (!prev.some(m => m.id === message.id)) {
+          return [...prev, message];
+        }
+        return prev;
       });
     }
     
     updateChatWithLatestMessage(message.chatId, message);
     
     if (!activeChat || activeChat.id !== message.chatId) {
-      const chat = chats.find(c => c.id === message.chatId);
+      const chat = chats?.find(c => c.id === message.chatId);
       if (chat) {
         const sender = chat.participants.find(p => p.id === message.senderId);
         toast({
