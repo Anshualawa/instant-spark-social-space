@@ -132,12 +132,23 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate participant IDs
+	for _, participantID := range req.ParticipantIDs {
+		var count int
+		err := config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", participantID).Scan(&count)
+		if err != nil || count == 0 {
+			http.Error(w, fmt.Sprintf("Invalid participant ID: %s", participantID), http.StatusBadRequest)
+			return
+		}
+	}
+
 	chatID := uuid.New().String()
 
 	// Start transaction
 	tx, err := config.DB.Begin()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error starting transaction: %v", err)
 		return
 	}
 	defer tx.Rollback()
@@ -149,6 +160,7 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 	`, chatID)
 	if err != nil {
 		http.Error(w, "Error creating chat", http.StatusInternalServerError)
+		log.Printf("Error creating chat: %v", err)
 		return
 	}
 
@@ -160,6 +172,7 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 		`, chatID, participantID)
 		if err != nil {
 			http.Error(w, "Error adding participants", http.StatusInternalServerError)
+			log.Printf("Error adding participant %s: %v", participantID, err)
 			return
 		}
 	}
@@ -167,29 +180,34 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "Error committing transaction", http.StatusInternalServerError)
+		log.Printf("Error committing transaction: %v", err)
 		return
 	}
 
 	// Get chat with participants
 	var chat ChatResponse
 	err = config.DB.QueryRow(`
-		SELECT id, name, is_group, created_at
+		SELECT id, COALESCE(name, ''), is_group, created_at
 		FROM chats WHERE id = ?
 	`, chatID).Scan(&chat.ID, &chat.Name, &chat.IsGroup, &chat.CreatedAt)
 	if err != nil {
 		http.Error(w, "Error retrieving chat", http.StatusInternalServerError)
+		log.Printf("Error retrieving chat: %v", err)
 		return
 	}
 
+	chat.Participants = []models.User{}
+
 	// Get participants
 	rows, err := config.DB.Query(`
-		SELECT u.id, u.username, u.email, u.avatar, u.is_online, u.last_seen
+		SELECT u.id, u.username, u.email, COALESCE(u.avatar, ''), u.is_online, u.last_seen
 		FROM users u
 		JOIN chat_participants cp ON u.id = cp.user_id
 		WHERE cp.chat_id = ?
 	`, chatID)
 	if err != nil {
 		http.Error(w, "Error retrieving participants", http.StatusInternalServerError)
+		log.Printf("Error retrieving participants: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -202,6 +220,7 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			http.Error(w, "Error scanning participants", http.StatusInternalServerError)
+			log.Printf("Error scanning participant: %v", err)
 			return
 		}
 		chat.Participants = append(chat.Participants, participant)
