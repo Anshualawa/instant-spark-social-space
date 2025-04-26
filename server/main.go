@@ -3,12 +3,14 @@ package main
 import (
 	"chat-app/internal/config"
 	"chat-app/internal/handlers"
-	"chat-app/internal/middleware"
+	authmdw "chat-app/internal/middleware"
+
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
@@ -19,6 +21,10 @@ func main() {
 
 	r := chi.NewRouter()
 
+	// Standard middlewares.
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	
 	// CORS middleware
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -37,7 +43,7 @@ func main() {
 
 	// Protected routes
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth)
+		r.Use(authmdw.Auth)
 
 		// Chat routes
 		r.Get("/api/chats", handlers.GetChats)
