@@ -46,6 +46,9 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(authmdw.Auth)
 
+		// WebSocket endpoint needs to be defined before other routes
+		r.Get("/ws", handlers.HandleWebSocket)
+
 		// Chat routes
 		r.Get("/api/chats", handlers.GetChats)
 		r.Post("/api/chats", handlers.CreateChat)
@@ -53,9 +56,6 @@ func main() {
 			r.Get("/messages", handlers.GetMessages)
 			r.Post("/messages", handlers.SendMessage)
 		})
-
-		// WebSocket
-		r.Get("/ws", handlers.HandleWebSocket)
 
 		// Add new users route
 		r.Get("/api/users", handlers.GetUsers)

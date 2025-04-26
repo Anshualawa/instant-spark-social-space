@@ -1,11 +1,14 @@
+
 package handlers
 
 import (
 	"chat-app/internal/config"
 	"chat-app/internal/models"
 	"chat-app/internal/store"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
