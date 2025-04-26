@@ -154,13 +154,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isRead: false,
       };
       
-      setMessages(prev => [...prev, tempMessage]);
+      setMessages(prev => {
+        if (prev === null) return [tempMessage];
+        return [...prev, tempMessage];
+      });
       
       const sentMessage = await chatApi.sendMessage(activeChat.id, content);
       
-      setMessages(prev => 
-        prev.map(msg => msg.id === tempId ? sentMessage : msg)
-      );
+      setMessages(prev => {
+        if (prev === null) return [sentMessage];
+        return prev.map(msg => msg.id === tempId ? sentMessage : msg);
+      });
       
       updateChatWithLatestMessage(activeChat.id, sentMessage);
       
@@ -174,7 +178,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Please check your connection and try again",
       });
       
-      setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')));
+      setMessages(prev => {
+        if (prev === null) return [];
+        return prev.filter(msg => !msg.id.startsWith('temp-'));
+      });
     }
   };
 
@@ -224,7 +231,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleNewMessage = (message: Message) => {
     if (activeChat && activeChat.id === message.chatId) {
-      setMessages(prev => [...prev, message]);
+      setMessages(prev => {
+        if (prev === null) return [message];
+        return [...prev, message];
+      });
     }
     
     updateChatWithLatestMessage(message.chatId, message);
@@ -242,16 +252,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateChatWithLatestMessage = (chatId: string, message: Message) => {
-    setChats(prev => prev.map(chat => {
-      if (chat.id === chatId) {
-        return {
-          ...chat,
-          lastMessage: message,
-          unreadCount: activeChat && activeChat.id === chatId ? 0 : (chat.unreadCount || 0) + 1
-        };
-      }
-      return chat;
-    }));
+    setChats(prev => {
+      if (!prev) return [];
+      return prev.map(chat => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            lastMessage: message,
+            unreadCount: activeChat && activeChat.id === chatId ? 0 : (chat.unreadCount || 0) + 1
+          };
+        }
+        return chat;
+      });
+    });
   };
 
   const handleTyping = (data: { chatId: string, userId: string, isTyping: boolean }) => {
@@ -264,12 +277,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleStatusChange = (data: { userId: string, isOnline: boolean }) => {
-    setChats(prev => prev.map(chat => ({
-      ...chat,
-      participants: chat.participants.map(p => 
-        p.id === data.userId ? { ...p, isOnline: data.isOnline } : p
-      )
-    })));
+    setChats(prev => {
+      if (!prev) return [];
+      return prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === data.userId ? { ...p, isOnline: data.isOnline } : p
+        )
+      }));
+    });
   };
 
   const setTyping = (isTyping: boolean) => {
