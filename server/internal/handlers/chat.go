@@ -1,4 +1,3 @@
-
 package handlers
 
 import (
@@ -6,6 +5,7 @@ import (
 	"chat-app/internal/models"
 	"chat-app/internal/store"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -293,6 +293,62 @@ func SendMessage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(newMessage)
 }
 
+func GetMessages(w http.ResponseWriter, r *http.Request) {
+	chatID := chi.URLParam(r, "id")
+	user := r.Context().Value("user").(models.User)
+
+	// Verify chat exists and user is participant
+	var count int
+	err := config.DB.QueryRow(`
+		SELECT COUNT(*) FROM chat_participants 
+		WHERE chat_id = ? AND user_id = ?
+	`, chatID, user.ID).Scan(&count)
+	if err != nil || count == 0 {
+		http.Error(w, "Chat not found or user not participant", http.StatusNotFound)
+		return
+	}
+
+	// Get messages for the chat
+	rows, err := config.DB.Query(`
+		SELECT id, chat_id, sender_id, content, is_read, created_at
+		FROM messages 
+		WHERE chat_id = ?
+		ORDER BY created_at ASC
+	`, chatID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving messages: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var msg models.Message
+		err := rows.Scan(
+			&msg.ID, &msg.ChatID, &msg.SenderID,
+			&msg.Content, &msg.IsRead, &msg.Timestamp,
+		)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error scanning message: %v", err), http.StatusInternalServerError)
+			return
+		}
+		messages = append(messages, msg)
+	}
+
+	// Mark all unread messages from others as read
+	_, err = config.DB.Exec(`
+		UPDATE messages
+		SET is_read = true
+		WHERE chat_id = ? AND sender_id != ? AND is_read = false
+	`, chatID, user.ID)
+	if err != nil {
+		log.Printf("Error marking messages as read: %v", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
 type ChatResponse struct {
 	ID           string        `json:"id"`
 	Name         string        `json:"name"`
@@ -302,4 +358,3 @@ type ChatResponse struct {
 	LastMessage  *models.Message `json:"lastMessage,omitempty"`
 	CreatedAt    time.Time     `json:"createdAt"`
 }
-

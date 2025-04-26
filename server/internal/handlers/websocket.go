@@ -1,3 +1,4 @@
+
 package handlers
 
 import (
@@ -37,7 +38,9 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Send: make(chan []byte, 256),
 	}
 
+	// Store the WebSocket connection for this user
 	store.SetConnection(user.ID, wsConn)
+	log.Printf("User %s connected via WebSocket", user.ID)
 
 	// Update user's online status in database
 	_, err = config.DB.Exec(`
@@ -52,6 +55,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Broadcast user's online status to others
 	broadcastUserStatus(user.ID, true)
 
+	// Start message handling goroutines
 	go handleWebSocketMessages(user.ID, conn, wsConn)
 	go writePump(user.ID, conn, wsConn)
 }

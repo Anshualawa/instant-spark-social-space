@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -49,7 +50,7 @@ func main() {
 		r.Get("/api/chats", handlers.GetChats)
 		r.Post("/api/chats", handlers.CreateChat)
 		r.Route("/api/chats/{id}", func(r chi.Router) {
-			r.Get("/messages", handlers.GetChats)
+			r.Get("/messages", handlers.GetMessages)
 			r.Post("/messages", handlers.SendMessage)
 		})
 
