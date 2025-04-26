@@ -1,37 +1,38 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Chat, Message, User, WebSocketMessage } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Chat, Message, User } from '../types';
 import { chatApi } from '../services/api';
-import webSocketService from '../services/websocket';
 import { useAuth } from './AuthContext';
+import { useMessages } from './MessageContext';
+import { useWebSocket } from './WebSocketContext';
 import { useToast } from '@/components/ui/use-toast';
 
 interface ChatContextType {
   chats: Chat[];
   activeChat: Chat | null;
-  messages: Message[];
   isLoading: boolean;
-  sendMessage: (content: string) => Promise<void>;
+  typingUsers: Record<string, boolean>;
   setActiveChat: (chat: Chat | null) => void;
   createChat: (participantId: string) => Promise<void>;
   createGroupChat: (name: string, participantIds: string[]) => Promise<void>;
-  wsStatus: 'connected' | 'disconnected' | 'connecting';
-  typingUsers: Record<string, boolean>;
   setTyping: (isTyping: boolean) => void;
+  updateChatWithLatestMessage: (chatId: string, message: Message) => void;
+  handleTyping: (data: { chatId: string; userId: string; isTyping: boolean }) => void;
+  handleStatusChange: (data: { userId: string; isOnline: boolean }) => void;
 }
 
 const ChatContext = createContext<ChatContextType>({
   chats: [],
   activeChat: null,
-  messages: [],
   isLoading: false,
-  sendMessage: async () => {},
+  typingUsers: {},
   setActiveChat: () => {},
   createChat: async () => {},
   createGroupChat: async () => {},
-  wsStatus: 'disconnected',
-  typingUsers: {},
   setTyping: () => {},
+  updateChatWithLatestMessage: () => {},
+  handleTyping: () => {},
+  handleStatusChange: () => {},
 });
 
 export const useChat = () => useContext(ChatContext);
@@ -39,33 +40,13 @@ export const useChat = () => useContext(ChatContext);
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        webSocketService.connect(token);
-        
-        const statusListener = (status: 'connected' | 'disconnected' | 'connecting') => {
-          setWsStatus(status);
-        };
-        
-        webSocketService.addStatusListener(statusListener);
-        
-        return () => {
-          webSocketService.removeStatusListener(statusListener);
-          webSocketService.disconnect();
-        };
-      }
-    }
-  }, [isAuthenticated]);
+  const { loadMessages, handleNewMessage } = useMessages();
+  const { wsStatus, sendMessage: sendWsMessage } = useWebSocket();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -74,39 +55,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      const messageListener = (wsMessage: WebSocketMessage) => {
-        console.log('WebSocket message received:', wsMessage);
-        switch (wsMessage.type) {
-          case 'message':
-            handleNewMessage(wsMessage.payload);
-            break;
-          case 'typing':
-            handleTyping(wsMessage.payload);
-            break;
-          case 'status':
-            handleStatusChange(wsMessage.payload);
-            break;
-          default:
-            console.log('Unknown message type:', wsMessage.type);
-        }
-      };
-      
-      webSocketService.addMessageListener(messageListener);
-      
-      return () => {
-        webSocketService.removeMessageListener(messageListener);
-      };
-    }
-  }, [isAuthenticated, activeChat]);
-
-  useEffect(() => {
     if (activeChat) {
       loadMessages(activeChat.id);
-    } else {
-      setMessages([]);
     }
-  }, [activeChat]);
+  }, [activeChat, loadMessages]);
 
   const loadChats = async () => {
     setIsLoading(true);
@@ -122,68 +74,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadMessages = async (chatId: string) => {
-    setIsLoading(true);
-    try {
-      const messageData = await chatApi.getMessages(chatId);
-      setMessages(messageData || []);
-    } catch (error) {
-      console.error(`Error loading messages for chat ${chatId}:`, error);
-      toast({
-        variant: "destructive",
-        title: "Failed to load messages",
-        description: "Please check your connection and try again",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const sendMessage = async (content: string) => {
-    if (!activeChat || !content.trim() || !user) return;
-    
-    try {
-      const tempId = `temp-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId,
-        chatId: activeChat.id,
-        senderId: user.id,
-        content,
-        timestamp: new Date().toISOString(),
-        isRead: false,
-      };
-      
-      setMessages(prev => {
-        if (prev === null) return [tempMessage];
-        return [...prev, tempMessage];
-      });
-      
-      const sentMessage = await chatApi.sendMessage(activeChat.id, content);
-      
-      setMessages(prev => {
-        if (prev === null) return [sentMessage];
-        return prev.map(msg => msg.id === tempId ? sentMessage : msg);
-      });
-      
-      updateChatWithLatestMessage(activeChat.id, sentMessage);
-      
-      setTyping(false);
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        variant: "destructive",
-        title: "Failed to send message",
-        description: "Please check your connection and try again",
-      });
-      
-      setMessages(prev => {
-        if (prev === null) return [];
-        return prev.filter(msg => !msg.id.startsWith('temp-'));
-      });
     }
   };
 
@@ -235,32 +125,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const handleNewMessage = (message: Message) => {
-    console.log('Handling new message:', message);
-    
-    // Update messages if we're in the active chat
-    if (activeChat && activeChat.id === message.chatId) {
-      setMessages(prev => {
-        if (prev === null) return [message];
-        // Check if message already exists to avoid duplicates
-        if (!prev.some(m => m.id === message.id)) {
-          return [...prev, message];
+  const setTyping = (isTyping: boolean) => {
+    if (activeChat && user) {
+      sendWsMessage({
+        type: 'typing',
+        payload: {
+          chatId: activeChat.id,
+          userId: user.id,
+          isTyping
         }
-        return prev;
       });
-    }
-    
-    updateChatWithLatestMessage(message.chatId, message);
-    
-    if (!activeChat || activeChat.id !== message.chatId) {
-      const chat = chats?.find(c => c.id === message.chatId);
-      if (chat) {
-        const sender = chat.participants.find(p => p.id === message.senderId);
-        toast({
-          title: chat.isGroup ? chat.name : sender?.username || "New message",
-          description: message.content,
-        });
-      }
     }
   };
 
@@ -301,33 +175,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const setTyping = (isTyping: boolean) => {
-    if (activeChat && user) {
-      webSocketService.sendMessage({
-        type: 'typing',
-        payload: {
-          chatId: activeChat.id,
-          userId: user.id,
-          isTyping
-        }
-      });
-    }
-  };
-
   return (
     <ChatContext.Provider
       value={{
         chats,
         activeChat,
-        messages: messages || [],
         isLoading,
-        sendMessage,
+        typingUsers,
         setActiveChat,
         createChat,
         createGroupChat,
-        wsStatus,
-        typingUsers: typingUsers || {},
         setTyping,
+        updateChatWithLatestMessage,
+        handleTyping,
+        handleStatusChange,
       }}
     >
       {children}

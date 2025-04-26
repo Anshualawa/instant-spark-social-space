@@ -2,6 +2,8 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChatProvider } from '@/contexts/ChatContext';
+import { MessageProvider } from '@/contexts/MessageContext';
+import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import AuthPage from './AuthPage';
 import ChatPage from './ChatPage';
 
@@ -24,9 +26,13 @@ const Index: React.FC = () => {
   }
   
   return (
-    <ChatProvider>
-      <ChatPage />
-    </ChatProvider>
+    <WebSocketProvider>
+      <MessageProvider>
+        <ChatProvider>
+          <ChatPage />
+        </ChatProvider>
+      </MessageProvider>
+    </WebSocketProvider>
   );
 };
 
