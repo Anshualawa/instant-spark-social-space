@@ -4,6 +4,7 @@ package handlers
 import (
 	"chat-app/internal/config"
 	"chat-app/internal/models"
+	"chat-app/internal/store"
 	"encoding/json"
 	"net/http"
 	"time"
