@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -50,6 +49,9 @@ func main() {
 
 		// WebSocket
 		r.Get("/ws", handlers.HandleWebSocket)
+
+		// Add new users route
+		r.Get("/api/users", handlers.GetUsers)
 	})
 
 	port := 8000
